@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Deal {{ slug }} - Underwriting</title>
+    <style>
+      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; max-width: 1100px; }
+      h1, h2, h3 { margin-top: 1.2rem; }
+      .meta, .card { border: 1px solid #eee; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem; background: #fafafa; }
+      .label { font-weight: 600; color: #555; }
+      pre { background: #111; color: #eee; padding: 1rem; border-radius: 6px; overflow: auto; font-size: 12px; }
+      a { color: #0366d6; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .pill { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.8rem; margin-right: 0.4rem; background: #e5efff; color: #174ea6; }
+    </style>
+  </head>
+  <body>
+    <p><a href="{{ url_for('list_deals') }}">&larr; All deals</a></p>
+    <h1>Deal: {{ slug }}</h1>
+
+    <div class="meta">
+      <h2>Email</h2>
+      {% if email_meta %}
+        <p><span class="label">Subject:</span> {{ email_meta.subject }}</p>
+        <p><span class="label">From:</span> {{ email_meta.sender }}</p>
+        <p><span class="label">To:</span> {{ email_meta.recipient }}</p>
+        <p><span class="label">Date:</span> {{ email_meta.date }}</p>
+        <p><span class="label">PDF files:</span>
+          {% for f in email_meta.pdf_files %}
+            <span class="pill">{{ f }}</span>
+          {% endfor %}
+        </p>
+      {% else %}
+        <p>No email metadata found for this deal.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Application</h2>
+      {% if app_info %}
+        {% if app_info.business_name %}
+          <p><span class="label">Business name:</span> {{ app_info.business_name }}</p>
+        {% endif %}
+        {% if app_info.time_in_business_years is not none %}
+          <p><span class="label">Time in business:</span> {{ app_info.time_in_business_years }} years</p>
+        {% endif %}
+        {% if app_info.fico_score %}
+          <p><span class="label">Est. FICO:</span> {{ app_info.fico_score }}</p>
+        {% endif %}
+        {% if app_info.state %}
+          <p><span class="label">State:</span> {{ app_info.state }}</p>
+        {% endif %}
+        {% if app_info.industry %}
+          <p><span class="label">Industry:</span> {{ app_info.industry }}</p>
+        {% endif %}
+        {% if app_info.requested_amount %}
+          <p><span class="label">Requested amount:</span> {{ "{:,.2f}".format(app_info.requested_amount) }}</p>
+        {% endif %}
+        {% if app_info.use_of_funds %}
+          <p><span class="label">Use of funds:</span> {{ app_info.use_of_funds }}</p>
+        {% endif %}
+        <form method="post" action="{{ url_for('reunderwrite_deal', slug=slug) }}" style="margin-top: 0.75rem;">
+          <label class="label" for="fico_score">Edit FICO score:</label>
+          <input
+            type="number"
+            name="fico_score"
+            id="fico_score"
+            min="300"
+            max="850"
+            step="1"
+            value="{{ app_info.fico_score or '' }}"
+            style="margin-left: 0.5rem; padding: 0.25rem 0.5rem; width: 80px;"
+          />
+          <button type="submit" style="margin-left: 0.75rem; padding: 0.3rem 0.7rem;">
+            Re-underwrite
+          </button>
+        </form>
+      {% else %}
+        <p>No application PDF parsed for this deal.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Bank Statement Analysis (summary)</h2>
+      {% if analysis and analysis.revenue_statistics %}
+        {# MoneyThumb-style analysis (from moneythumb_extractor.py) #}
+        {% set stats = analysis.revenue_statistics %}
+        <p><span class="label">Monthly true revenue:</span> {{ "{:,.2f}".format(stats.true_revenue_monthly) }}</p>
+        <p><span class="label">Monthly expenses:</span> {{ "{:,.2f}".format(stats.expenses_monthly) }}</p>
+        <p><span class="label">Profit (monthly):</span> {{ "{:,.2f}".format(stats.profit_monthly) }}</p>
+        <p><span class="label">MCA withhold %:</span> {{ "{:.1%}".format(stats.mca_withhold_percent) }}</p>
+      {% elif analysis and analysis.monthly_averages %}
+        {# Combined-analysis JSON from batch_processor.generate_combined_analysis #}
+        {% set m = analysis.monthly_averages %}
+        <p><span class="label">Avg monthly deposits:</span> {{ "{:,.2f}".format(m.avg_deposits) }}</p>
+        <p><span class="label">Avg monthly withdrawals:</span> {{ "{:,.2f}".format(m.avg_withdrawals) }}</p>
+        <p><span class="label">Avg ledger balance:</span> {{ "{:,.2f}".format(m.avg_ledger_balance) }}</p>
+        <p><span class="label">Avg MCA payments:</span> {{ "{:,.2f}".format(m.avg_mca_payments) }}</p>
+        <p><span class="label">Net available after MCA:</span> {{ "{:,.2f}".format(m.available_after_mca) }}</p>
+      {% else %}
+        <p>No analysis JSON found for this deal.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Underwriting Decision</h2>
+      {% if uw and uw.decision %}
+        <p><span class="label">Decision:</span> {{ uw.decision }}</p>
+        <p><span class="label">Risk score:</span> {{ uw.risk_score }}/100</p>
+        <p><span class="label">Position:</span> {{ uw.position }}</p>
+
+        {% if uw.offers %}
+          <h3>Top offers</h3>
+          <ul>
+            {% for offer in uw.offers[:3] %}
+              <li>
+                <strong>{{ offer.program_name }}</strong>
+                (Position {{ offer.position }}, {{ offer.max_term_months }} mo) –
+                Max Funding {{ "{:,.2f}".format(offer.max_funding) }},
+                Daily {{ "{:,.2f}".format(offer.daily_payment) }}
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      {% else %}
+        <p>No underwriting result found yet for this deal.</p>
+      {% endif %}
+    </div>
+
+    <details>
+      <summary>Raw underwriting JSON</summary>
+      <pre>{{ uw | tojson(indent=2) }}</pre>
+    </details>
+
+  </body>
+  </html>
+

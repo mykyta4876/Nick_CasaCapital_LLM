@@ -1,0 +1,17 @@
+# Core PDF & pipeline
+pdfplumber>=0.10.0
+pymupdf>=1.23.0
+pillow>=10.0.0
+openpyxl>=3.1.0
+
+# Flask web app & Gmail
+flask>=3.0.0
+google-api-python-client>=2.100.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
+
+# Production WSGI server (for GCP VM)
+gunicorn>=21.0.0
+
+# Optional: OCR for scanned PDFs (install separately if needed)
+# torch, surya-ocr

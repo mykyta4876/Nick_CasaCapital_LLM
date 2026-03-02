@@ -1,0 +1,164 @@
+Work summary for MCA OCR & Underwriting pipeline
+================================================
+
+Date: 2026-02-25
+
+1) Project understanding and environment
+----------------------------------------
+- Reviewed the `mca-ocr-worker` project structure and the related `casa-capital` data folders.
+- Confirmed how the existing components fit together:
+  - `extractor.py` for direct PDF bank-statement extraction.
+  - `moneythumb_extractor.py` for MoneyThumb-style CSV → analysis.
+  - `batch_processor.py` for combining multiple statements.
+  - `underwriting_engine.py` for configurable MCA underwriting decisions.
+- Ensured the virtual environment and dependencies are set up for PDF/OCR and underwriting.
+
+2) Implemented end-to-end PDF → Analysis → Underwriting pipeline
+----------------------------------------------------------------
+- Created a new `src/pipeline.py` entrypoint that wires existing components into a single flow:
+  - Single PDF:
+    - Runs `extractor.process_statement(...)` to parse a bank statement PDF into JSON.
+    - Converts the extracted metrics into an `ApplicationData` object.
+    - Runs the `UnderwritingEngine` to produce an underwriting decision and offers.
+  - Folder of PDFs:
+    - Uses `batch_processor.process_batch(...)` to process all PDFs in a directory.
+    - Uses the combined metrics to create a single `ApplicationData` for the full history.
+    - Runs the underwriting engine on the combined view.
+- Outputs:
+  - Per-PDF analysis JSON: `output/<pdf_stem>_analysis.json`.
+  - Per-PDF underwriting JSON (single mode): `output/<pdf_stem>_underwriting.json`.
+  - Combined batch analysis: `output/combined_analysis.json`.
+  - Combined underwriting decision and offers: `output/combined_underwriting.json`.
+- Updated `README.md` to document the new full-pipeline commands:
+  - `python src\pipeline.py samples\bank_statement.pdf`
+  - `python src\pipeline.py samples\`
+
+3) Added support for TXN Bank statements
+----------------------------------------
+- Identified that some client statements are from **TXN Bank**, not Bank of America, and that the generic Bank of America parser was mislabeling them and failing to capture totals.
+- Implemented explicit bank detection in `extractor.py`:
+  - When the extracted text contains "TXN Bank", the extractor now runs a dedicated TXN parser instead of the Bank of America regexes.
+- Implemented `parse_txn_bank(...)` in `extractor.py` to correctly read TXN layouts:
+  - Extracts bank name, account number, and business name (e.g. `WATERBOYZ LLC`).
+  - Extracts statement period from the Account Summary:
+    - `11/01/2025 Beginning Balance`
+    - `11/30/2025 Ending Balance`
+  - Extracts key totals from the Account Summary section:
+    - Beginning Balance.
+    - Ending Balance.
+    - Total credits for the period (e.g. `11 Credit(s) This Period $198,823.25`).
+    - Total debits for the period (e.g. `136 Debit(s) This Period $205,093.30`).
+  - Extracts total checks from the “Checks Cleared” footer (e.g. `45 item(s) totaling $122,760.02`).
+  - Parses the "Daily Balances" table to:
+    - Build a list of daily balances.
+    - Compute an average ledger balance.
+    - Identify any negative-balance days and count them.
+  - Counts NSF/overdraft fees by scanning for fee labels in the statement text.
+- Adjusted the generic account-holder regex to avoid mis-identifying helper text as the business name and to focus on lines ending in company suffixes (LLC, INC, CORP, CO).
+- Verified on a real TXN PDF (`0a81a622_November-2025.pdf`) that the extractor now produces:
+  - Bank: TXN Bank.
+  - Account: XXXXXX0941.
+  - Period: 11/01/2025 to 11/30/2025.
+  - Total Deposits: ~$198,823.25.
+  - Total Withdrawals: ~$205,093.30.
+  - Reasonable NSF counts.
+
+4) Connected pipeline to borrower application data
+--------------------------------------------------
+- Underwriting requires non-bank data such as:
+  - Time in business (years).
+  - Owner FICO.
+  - Industry, state, and other eligibility attributes.
+- Previously, the pipeline defaulted these values to zero, which caused automatic declines even when the bank metrics were strong.
+- Extended `pipeline.py` to accept an **optional application JSON file** and merge it into the `ApplicationData` object:
+  - New helper `apply_app_overrides(...)`:
+    - Loads a JSON file (e.g. `app_data.json`).
+    - For every key that matches an `ApplicationData` field, overrides the value (e.g. `time_in_business_years`, `fico_score`, `industry`, `state`, etc.).
+  - Updated command-line interface:
+    - `python src\pipeline.py <pdf_or_folder> [output_dir] [app_data.json]`.
+    - If you pass a `.json` as the second argument, it is treated as the app data file.
+    - If you pass both output dir and app data, order is: `<pdf_or_folder> <output_dir> <app_data.json>`.
+
+5) End-to-end validation with a real TXN statement
+-------------------------------------------------
+- Created an `app_data.json` for the test merchant (example: business name, time in business, FICO, and industry).
+- Ran the full batch pipeline:
+  - Command: `python src\pipeline.py samples\ output\ app_data.json`.
+  - The `samples` folder contained TXN statement(s) for November 2025.
+- Observed results:
+  - Batch processor aggregated the statements and produced `output\combined_analysis.json` with:
+    - Average monthly deposits ≈ $198,823.25.
+    - Average monthly withdrawals ≈ $205,093.30.
+    - No existing MCA burden (for this sample).
+    - Four NSF/overdraft events across the period.
+  - Pipeline built `ApplicationData` from the combined analysis and then overlaid application data from `app_data.json`.
+  - Underwriting engine produced:
+    - Final decision: **AUTO_APPROVE**.
+    - Risk score: **100 / 100**.
+    - Position: **1**.
+    - Eligible programs: High Risk, Standard, Premium.
+    - Recommended offer (Premium, Position 1) around:
+      - Max funding ≈ $258,470.
+      - Term ≈ 8.0 months.
+      - Sell rate ≈ 1.39.
+      - Daily payment ≈ $1,497.
+    - Full stip list (documents required for funding) based on the configured rules.
+
+6) Application PDF support and content-based classification
+-----------------------------------------------------------
+- Added `application_extractor.py` to parse application PDFs and extract:
+  - Legal name, business name, business start date (and computed time-in-business years).
+  - Est. FICO, amount requested, state, industry, use of proceeds, etc.
+- Extended `pipeline.py` to accept one or more application data sources:
+  - Application PDF path(s) and/or `app_data.json`; all are merged in order into `ApplicationData`.
+- Updated `batch_processor.py` to classify PDFs by content (not just filename):
+  - Statement keywords (e.g. "account statement", "beginning balance", "total deposits").
+  - Application keywords (e.g. "application", "FICO", "time in business", "legal name").
+  - Statement PDFs are processed for bank metrics; application PDFs are used only for application data and are excluded from combined statement analysis.
+- Fixed combined analysis so the overall period is the min start date to max end date across all statements.
+
+7) American Express Business Checking parser
+--------------------------------------------
+- Added a dedicated parser in `extractor.py` for American Express Business Checking statements.
+- Detection prioritizes AmEx, then TXN, then Bank of America.
+- AmEx parser extracts account holder, account number, statement period, beginning/ending balance, total deposits, total debits, and NSF/overdraft fee counts from the statement layout.
+
+8) Gmail integration and deal folders
+-------------------------------------
+- Implemented `gmail_fetcher.py` to:
+  - List unread (or filtered) Gmail messages with PDF attachments via the Gmail API.
+  - Download PDF attachments and save them under a per-email deal folder.
+  - Save `email_metadata.json` (message_id, subject, sender, date, pdf_files) in the same folder.
+  - Mark processed emails as read (requires `gmail.modify` scope; re-auth after scope change).
+- Deal folder layout: `casa-capital/deals/<slug>/`:
+  - Slug = subject-based slug + unique suffix so same-subject emails get different folders.
+  - Unique suffix uses a timestamp from the email date (YYYYMMDD_HHMMSS) for human-readable, unique folders (e.g. `abundia_lc_corp_20260226_210452`).
+  - Attachment filenames include a timestamp (with microseconds when needed) to avoid collisions when different emails have the same PDF name.
+- All paths in metadata are stored relative to the project root so the underwriting service can resolve files under `casa-capital/deals/` from the `mca-ocr-worker` tree.
+
+9) Flask underwriting service and email worker
+----------------------------------------------
+- Implemented `uw_service.py` (Flask app) that:
+  - On `/tasks/process-unread`: finds unread Gmail messages, runs `gmail_fetcher.save_attachments_and_metadata` for each, classifies PDFs (statement vs application), runs the full pipeline (combined analysis + underwriting), and writes results into the same deal folder (`analysis.json`, `underwriting.json`, `app_snapshot.json`), then marks the email as read.
+  - Uses the same slug logic as the fetcher (subject + timestamp) so deal directories match.
+- Application overrides: per-deal `app_override.json` is applied when present (e.g. manually entered FICO); result is snapshotted to `app_snapshot.json`.
+- Missing FICO: if FICO is missing or ≤ 0, the deal is auto-declined with a clear reason ("Missing FICO score...") and no full underwriting run; the user can later add FICO and re-underwrite.
+- Implemented `email_worker.py` to call the process-unread endpoint in a loop every 10 seconds for continuous ingestion.
+
+10) Web interface for deals
+---------------------------
+- Deals list: `GET /deals` shows all deal folders under `casa-capital/deals/` with search (by slug) and pagination.
+- Deal detail: `GET /deals/<slug>` shows:
+  - Email metadata (subject, from, to, date, PDF list).
+  - Combined analysis (monthly averages, risk indicators, period).
+  - Underwriting decision, offers, stips, and eligibility.
+  - Application info (business name, time in business, FICO, state, industry, etc.) from `app_snapshot.json` when present, so manually entered FICO is visible after re-underwriting.
+- Re-underwrite: on the deal detail page, user can edit the FICO score and click "Re-underwrite". The service updates `app_override.json`, rebuilds application data, re-runs underwriting (or applies the same missing-FICO auto-decline), and redirects back to the deal detail page so the updated underwriting and FICO are shown immediately.
+
+11) Current capabilities delivered
+----------------------------------
+- Single-command pipeline: bank statement PDFs (single or folder) plus optional application PDF(s) and/or `app_data.json` → combined analysis and underwriting (TXN Bank and American Express supported; application PDFs classified and not treated as statements).
+- Automated ingestion: unread Gmail → PDFs and metadata saved to `casa-capital/deals/<subject_timestamp>/` → pipeline run in-place → email marked read; optional background worker polling every 10 seconds.
+- Web UI: list deals (search, paginate), view deal detail (email, analysis, underwriting, application), edit FICO and re-underwrite with immediate redirect to refreshed deal page showing updated FICO and decision.
+- The system is ready for additional banks (new parsers in `extractor.py`), more application fields (`application_extractor.py`), and integration with a CRM or broker portal.
+

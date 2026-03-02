@@ -1,0 +1,443 @@
+{
+  "version": "1.0",
+  "last_updated": "2025-02-01",
+  
+  "auto_decline_triggers": {
+    "max_negative_days": 5,
+    "max_nsf_count": 10,
+    "min_monthly_deposits": 20000,
+    "max_mca_withhold_percent": 0.50,
+    "min_avg_daily_balance": 0,
+    "max_existing_positions": 6,
+    "min_deposit_days_per_month": 4
+  },
+  
+  "programs": {
+    "high_risk": {
+      "name": "High Risk",
+      "enabled": true,
+      "min_time_in_business_years": 1,
+      "min_fico": 550,
+      "min_deposit_days_per_month": 5,
+      "min_monthly_deposits": 40000,
+      "min_balance_multiple_of_remit": 3,
+      "max_negative_days": 4,
+      "bank_statements_required": 3,
+      "positions": {
+        "1": {
+          "enabled": true,
+          "max_term_months": 7,
+          "max_gross_reserve": 0.20,
+          "max_funding": 300000
+        },
+        "2": {
+          "enabled": true,
+          "max_term_months": 6,
+          "max_gross_reserve": 0.25,
+          "max_funding": 500000
+        },
+        "3": {
+          "enabled": true,
+          "max_term_months": 5,
+          "max_gross_reserve": 0.30,
+          "max_funding": 500000
+        },
+        "4": {
+          "enabled": true,
+          "max_term_months": 4,
+          "max_gross_reserve": 0.35,
+          "max_funding": 500000
+        },
+        "5": {
+          "enabled": true,
+          "max_term_months": 3,
+          "max_gross_reserve": 0.40,
+          "max_funding": 300000
+        }
+      },
+      "buy_rates": {
+        "1": {"2": 1.28, "3": 1.29, "4": 1.30, "5": 1.31, "6": 1.32, "7": 1.33},
+        "2": {"2": 1.29, "3": 1.30, "4": 1.31, "5": 1.32, "6": 1.33},
+        "3": {"2": 1.30, "3": 1.31, "4": 1.32, "5": 1.33},
+        "4": {"2": 1.31, "3": 1.32, "4": 1.33},
+        "5": {"2": 1.32, "3": 1.33}
+      },
+      "origination_fee": 0.07
+    },
+    
+    "standard": {
+      "name": "Standard",
+      "enabled": true,
+      "min_time_in_business_years": 2,
+      "min_fico": 600,
+      "min_deposit_days_per_month": 6,
+      "min_monthly_deposits": 40000,
+      "min_balance_multiple_of_remit": 3,
+      "max_negative_days": 3,
+      "bank_statements_required": 3,
+      "positions": {
+        "1": {
+          "enabled": true,
+          "max_term_months": 7.5,
+          "max_gross_reserve": 0.20,
+          "max_funding": 300000
+        },
+        "2": {
+          "enabled": true,
+          "max_term_months": 7,
+          "max_gross_reserve": 0.25,
+          "max_funding": 500000
+        },
+        "3": {
+          "enabled": true,
+          "max_term_months": 6,
+          "max_gross_reserve": 0.30,
+          "max_funding": 500000
+        },
+        "4": {
+          "enabled": true,
+          "max_term_months": 5,
+          "max_gross_reserve": 0.35,
+          "max_funding": 500000
+        }
+      },
+      "buy_rates": {
+        "1": {"2": 1.24, "3": 1.25, "4": 1.26, "5": 1.27, "6": 1.28, "7": 1.29, "7.5": 1.30},
+        "2": {"2": 1.25, "3": 1.26, "4": 1.27, "5": 1.28, "6": 1.29, "7": 1.30},
+        "3": {"2": 1.26, "3": 1.27, "4": 1.28, "5": 1.29, "6": 1.30},
+        "4": {"2": 1.27, "3": 1.28, "4": 1.29, "5": 1.30}
+      },
+      "origination_fee": 0.06
+    },
+    
+    "premium": {
+      "name": "Premium",
+      "enabled": true,
+      "min_time_in_business_years": 3,
+      "min_fico": 625,
+      "min_deposit_days_per_month": 7,
+      "min_monthly_deposits": 40000,
+      "min_balance_multiple_of_remit": 5,
+      "max_negative_days": 2,
+      "bank_statements_required": 3,
+      "positions": {
+        "1": {
+          "enabled": true,
+          "max_term_months": 8,
+          "max_gross_reserve": 0.20,
+          "max_funding": 300000
+        },
+        "2": {
+          "enabled": true,
+          "max_term_months": 7,
+          "max_gross_reserve": 0.25,
+          "max_funding": 500000
+        },
+        "3": {
+          "enabled": true,
+          "max_term_months": 6,
+          "max_gross_reserve": 0.30,
+          "max_funding": 500000
+        }
+      },
+      "buy_rates": {
+        "1": {"2": 1.22, "3": 1.23, "4": 1.24, "5": 1.25, "6": 1.26, "7": 1.27, "8": 1.28},
+        "2": {"2": 1.23, "3": 1.24, "4": 1.25, "5": 1.26, "6": 1.27, "7": 1.28},
+        "3": {"2": 1.24, "3": 1.25, "4": 1.26, "5": 1.27, "6": 1.28}
+      },
+      "origination_fee": 0.05
+    },
+    
+    "premium_plus": {
+      "name": "Premium Plus",
+      "enabled": true,
+      "min_time_in_business_years": 5,
+      "min_fico": 675,
+      "min_deposit_days_per_month": 8,
+      "min_monthly_deposits": 40000,
+      "min_balance_multiple_of_remit": 5,
+      "max_negative_days": 2,
+      "bank_statements_required": 3,
+      "positions": {
+        "1": {
+          "enabled": true,
+          "max_term_months": 9,
+          "max_gross_reserve": 0.20,
+          "max_funding": 500000
+        },
+        "2": {
+          "enabled": true,
+          "max_term_months": 8,
+          "max_gross_reserve": 0.30,
+          "max_funding": 500000
+        }
+      },
+      "buy_rates": {
+        "1": {"2": 1.20, "3": 1.21, "4": 1.22, "5": 1.23, "6": 1.24, "7": 1.25, "8": 1.26, "9": 1.27},
+        "2": {"2": 1.21, "3": 1.22, "4": 1.23, "5": 1.24, "6": 1.25, "7": 1.26, "8": 1.27}
+      },
+      "origination_fee": 0.04
+    },
+    
+    "construction_st": {
+      "name": "Construction (Special Trades)",
+      "enabled": true,
+      "industry_codes": ["construction", "plumbing", "electrical", "hvac", "roofing", "framing", "drywall"],
+      "min_time_in_business_years": 3,
+      "min_fico": 650,
+      "min_deposit_days_per_month": 7,
+      "min_monthly_deposits": 75000,
+      "min_balance_multiple_of_remit": 4,
+      "max_negative_days": 3,
+      "bank_statements_required": 3,
+      "requires_national_bank": true,
+      "requires_contractor_license": true,
+      "min_tradelines": 3,
+      "positions": {
+        "1": {
+          "enabled": false
+        },
+        "2": {
+          "enabled": true,
+          "max_term_months": 6.5,
+          "max_gross_reserve": 0.25,
+          "max_funding": 300000
+        },
+        "3": {
+          "enabled": true,
+          "max_term_months": 5.5,
+          "max_gross_reserve": 0.30,
+          "max_funding": 300000
+        }
+      },
+      "buy_rates": {
+        "2": {"2": 1.27, "3": 1.28, "4": 1.29, "5": 1.30, "6": 1.31, "6.5": 1.32},
+        "3": {"2": 1.28, "3": 1.29, "4": 1.30, "5": 1.31, "5.5": 1.32}
+      },
+      "origination_fee": 0.07
+    },
+    
+    "construction_gc": {
+      "name": "Construction (General Contractors)",
+      "enabled": true,
+      "industry_codes": ["general_contractor", "gc"],
+      "min_time_in_business_years": 5,
+      "min_fico": 650,
+      "min_deposit_days_per_month": 7,
+      "min_monthly_deposits": 200000,
+      "min_balance_multiple_of_remit": 4,
+      "max_negative_days": 3,
+      "bank_statements_required": 3,
+      "requires_national_bank": true,
+      "requires_contractor_license": true,
+      "min_tradelines": 3,
+      "max_commission_points": 12,
+      "positions": {
+        "1": {
+          "enabled": false
+        },
+        "2": {
+          "enabled": true,
+          "max_term_months": 6,
+          "max_gross_reserve": 0.25,
+          "max_funding": 250000
+        },
+        "3": {
+          "enabled": true,
+          "max_term_months": 5,
+          "max_gross_reserve": 0.30,
+          "max_funding": 250000
+        }
+      },
+      "buy_rates": {
+        "2": {"2": 1.27, "3": 1.28, "4": 1.29, "5": 1.30, "6": 1.31},
+        "3": {"2": 1.28, "3": 1.29, "4": 1.30, "5": 1.31}
+      },
+      "origination_fee": 0.07
+    },
+    
+    "trucking": {
+      "name": "Trucking",
+      "enabled": true,
+      "industry_codes": ["trucking", "transportation", "freight", "logistics"],
+      "min_time_in_business_years": 5,
+      "min_fico": 650,
+      "min_deposit_days_per_month": 7,
+      "min_monthly_deposits": 200000,
+      "min_balance_multiple_of_remit": 5,
+      "max_negative_days": 3,
+      "bank_statements_required": 3,
+      "requires_national_bank": true,
+      "requires_insurance_binder": true,
+      "min_trucks_on_safer": 5,
+      "positions": {
+        "1": {
+          "enabled": false
+        },
+        "2": {
+          "enabled": true,
+          "max_term_months": 6,
+          "max_gross_reserve": 0.25,
+          "max_funding": 250000
+        },
+        "3": {
+          "enabled": true,
+          "max_term_months": 5,
+          "max_gross_reserve": 0.30,
+          "max_funding": 250000
+        }
+      },
+      "buy_rates": {
+        "2": {"2": 1.27, "3": 1.28, "4": 1.29, "5": 1.30, "6": 1.31},
+        "3": {"2": 1.28, "3": 1.29, "4": 1.30, "5": 1.31}
+      },
+      "origination_fee": 0.07
+    }
+  },
+  
+  "commission_tiers": {
+    "high_risk": [
+      {"upsell": 0.00, "commission": 0.01},
+      {"upsell": 0.005, "commission": 0.015},
+      {"upsell": 0.01, "commission": 0.02},
+      {"upsell": 0.015, "commission": 0.025},
+      {"upsell": 0.02, "commission": 0.03},
+      {"upsell": 0.02, "commission": 0.04},
+      {"upsell": 0.02, "commission": 0.05},
+      {"upsell": 0.02, "commission": 0.06},
+      {"upsell": 0.02, "commission": 0.07},
+      {"upsell": 0.02, "commission": 0.08},
+      {"upsell": 0.02, "commission": 0.09},
+      {"upsell": 0.02, "commission": 0.10},
+      {"upsell": 0.025, "commission": 0.105},
+      {"upsell": 0.03, "commission": 0.11},
+      {"upsell": 0.035, "commission": 0.115},
+      {"upsell": 0.04, "commission": 0.12},
+      {"upsell": 0.039, "commission": 0.13}
+    ],
+    "standard": [
+      {"upsell": 0.00, "commission": 0.01},
+      {"upsell": 0.00, "commission": 0.02},
+      {"upsell": 0.01, "commission": 0.03},
+      {"upsell": 0.01, "commission": 0.035},
+      {"upsell": 0.01, "commission": 0.04},
+      {"upsell": 0.01, "commission": 0.05},
+      {"upsell": 0.015, "commission": 0.055},
+      {"upsell": 0.02, "commission": 0.06},
+      {"upsell": 0.02, "commission": 0.07},
+      {"upsell": 0.025, "commission": 0.075},
+      {"upsell": 0.03, "commission": 0.08},
+      {"upsell": 0.03, "commission": 0.09},
+      {"upsell": 0.03, "commission": 0.10},
+      {"upsell": 0.035, "commission": 0.105},
+      {"upsell": 0.04, "commission": 0.11},
+      {"upsell": 0.045, "commission": 0.115},
+      {"upsell": 0.05, "commission": 0.12},
+      {"upsell": 0.05, "commission": 0.13},
+      {"upsell": 0.05, "commission": 0.14}
+    ],
+    "premium": [
+      {"upsell": 0.00, "commission": 0.01},
+      {"upsell": 0.005, "commission": 0.015},
+      {"upsell": 0.01, "commission": 0.02},
+      {"upsell": 0.01, "commission": 0.03},
+      {"upsell": 0.01, "commission": 0.04},
+      {"upsell": 0.01, "commission": 0.05},
+      {"upsell": 0.015, "commission": 0.055},
+      {"upsell": 0.02, "commission": 0.06},
+      {"upsell": 0.025, "commission": 0.065},
+      {"upsell": 0.03, "commission": 0.07},
+      {"upsell": 0.035, "commission": 0.075},
+      {"upsell": 0.04, "commission": 0.08},
+      {"upsell": 0.045, "commission": 0.085},
+      {"upsell": 0.05, "commission": 0.09},
+      {"upsell": 0.055, "commission": 0.095},
+      {"upsell": 0.06, "commission": 0.10},
+      {"upsell": 0.06, "commission": 0.11},
+      {"upsell": 0.06, "commission": 0.12},
+      {"upsell": 0.06, "commission": 0.13},
+      {"upsell": 0.065, "commission": 0.135},
+      {"upsell": 0.069, "commission": 0.14}
+    ],
+    "premium_plus": [
+      {"upsell": 0.00, "commission": 0.01},
+      {"upsell": 0.005, "commission": 0.015},
+      {"upsell": 0.01, "commission": 0.02},
+      {"upsell": 0.015, "commission": 0.025},
+      {"upsell": 0.015, "commission": 0.035},
+      {"upsell": 0.02, "commission": 0.04},
+      {"upsell": 0.025, "commission": 0.045},
+      {"upsell": 0.025, "commission": 0.055},
+      {"upsell": 0.03, "commission": 0.06},
+      {"upsell": 0.03, "commission": 0.07},
+      {"upsell": 0.035, "commission": 0.075},
+      {"upsell": 0.04, "commission": 0.08},
+      {"upsell": 0.04, "commission": 0.09},
+      {"upsell": 0.045, "commission": 0.095},
+      {"upsell": 0.05, "commission": 0.10},
+      {"upsell": 0.055, "commission": 0.105},
+      {"upsell": 0.06, "commission": 0.11},
+      {"upsell": 0.06, "commission": 0.12},
+      {"upsell": 0.065, "commission": 0.125},
+      {"upsell": 0.07, "commission": 0.13},
+      {"upsell": 0.075, "commission": 0.135},
+      {"upsell": 0.08, "commission": 0.14},
+      {"upsell": 0.079, "commission": 0.15}
+    ]
+  },
+  
+  "stip_requirements": {
+    "always_required": [
+      "signed_application",
+      "signed_contracts",
+      "bank_statements",
+      "drivers_license",
+      "voided_check",
+      "merchant_interview",
+      "proof_of_ownership_51_percent",
+      "bank_verification_day_of_funding"
+    ],
+    "deals_over_100k": [
+      "ar_verification_top_3_vendors",
+      "landlord_verification",
+      "truepic"
+    ],
+    "deals_over_150k": [
+      "pl_statement",
+      "balance_sheet",
+      "tax_return"
+    ],
+    "deals_over_250k": [
+      "taxguard_8821"
+    ],
+    "deals_over_300k": [
+      "management_approval_required"
+    ]
+  },
+  
+  "funding_calculation": {
+    "max_advance_percent_of_monthly_revenue": 1.5,
+    "max_advance_percent_of_true_revenue": 1.3,
+    "daily_payment_divisor": 22,
+    "weekly_payment_divisor": 4.33,
+    "default_term_days": 120
+  },
+  
+  "risk_scoring": {
+    "weights": {
+      "negative_days": -10,
+      "nsf_count": -5,
+      "mca_positions": -8,
+      "mca_withhold_over_15_percent": -15,
+      "mca_withhold_over_25_percent": -25,
+      "declining_balance_trend": -10,
+      "low_avg_balance": -5,
+      "high_revenue": 10,
+      "no_mca_positions": 15,
+      "positive_profit": 10
+    },
+    "base_score": 100,
+    "auto_decline_below": 40,
+    "manual_review_below": 70
+  }
+}
