@@ -80,6 +80,8 @@ HEADLESS_REDIRECT_URI = "http://localhost:8080/"
 
 def _run_oauth_headless(flow: "InstalledAppFlow") -> Credentials:
     """Run OAuth flow by printing the URL and reading the redirect URL (for headless/VM)."""
+    # Allow http://localhost redirect (oauthlib otherwise requires HTTPS)
+    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
     flow.redirect_uri = HEADLESS_REDIRECT_URI
     auth_url, _ = flow.authorization_url(
         access_type="offline",
