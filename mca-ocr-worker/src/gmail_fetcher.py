@@ -73,6 +73,33 @@ class EmailMetadata:
     pdf_files: List[str]
 
 
+# Redirect URI for headless OAuth (no browser). Add this exact URI in Google Cloud Console
+# under APIs & Services → Credentials → your OAuth client → Authorized redirect URIs.
+HEADLESS_REDIRECT_URI = "http://localhost:8080/"
+
+
+def _run_oauth_headless(flow: "InstalledAppFlow") -> Credentials:
+    """Run OAuth flow by printing the URL and reading the redirect URL (for headless/VM)."""
+    flow.redirect_uri = HEADLESS_REDIRECT_URI
+    auth_url, _ = flow.authorization_url(
+        access_type="offline",
+        prompt="consent",
+        include_granted_scopes="true",
+    )
+    print("\nNo browser available (e.g. on a server). Complete auth on your computer:\n")
+    print("1. Open this URL in your browser:")
+    print("   ", auth_url)
+    print()
+    print("2. After signing in and allowing access, you will be redirected to a page that may not load.")
+    print("3. Copy the ENTIRE URL from your browser's address bar and paste it below:")
+    print()
+    redirect_url = input("Paste the redirect URL here: ").strip()
+    if not redirect_url:
+        raise SystemExit("No URL pasted. Exiting.")
+    flow.fetch_token(authorization_response=redirect_url)
+    return flow.credentials
+
+
 def get_gmail_service() -> Any:
     """Authenticate and return a Gmail API service instance."""
     creds: Credentials | None = None
@@ -93,7 +120,17 @@ def get_gmail_service() -> Any:
             flow = InstalledAppFlow.from_client_secrets_file(
                 str(CREDENTIALS_PATH), SCOPES
             )
-            creds = flow.run_local_server(port=0)
+            # On headless servers (e.g. GCP VM) there is no browser; use manual paste flow.
+            try:
+                creds = flow.run_local_server(port=0)
+            except Exception as e:
+                if "could not locate runnable browser" in str(e) or "webbrowser" in str(e).lower():
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        str(CREDENTIALS_PATH), SCOPES
+                    )
+                    creds = _run_oauth_headless(flow)
+                else:
+                    raise
         # Save the credentials for the next run
         with TOKEN_PATH.open("w") as token:
             token.write(creds.to_json())
