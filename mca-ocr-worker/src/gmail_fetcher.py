@@ -52,7 +52,11 @@ from datetime import datetime
 
 
 # If modifying these scopes, delete the token.json file.
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
+# Include both so token response matches (Google may return readonly when include_granted_scopes is used).
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.readonly",
+]
 
 ROOT_DIR = Path(__file__).resolve().parent.parent  # mca-ocr-worker
 PROJECT_ROOT = ROOT_DIR.parent                    # Nick_CasaCapital_LLM
