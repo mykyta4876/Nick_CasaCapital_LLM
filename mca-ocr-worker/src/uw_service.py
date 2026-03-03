@@ -16,8 +16,10 @@ from pathlib import Path
 from typing import List, Tuple
 from dataclasses import asdict
 import json
+import os
+from functools import wraps
 
-from flask import Flask, jsonify, render_template, abort, request, redirect, url_for
+from flask import Flask, jsonify, render_template, abort, request, redirect, url_for, session
 
 from gmail_fetcher import (
     get_gmail_service,
@@ -42,8 +44,29 @@ SAMPLES_DIR = ROOT_DIR / "samples"
 OUTPUT_DIR = ROOT_DIR / "output"
 APP_DATA_JSON = ROOT_DIR / "app_data.json"
 DEALS_ROOT = PROJECT_ROOT / "casa-capital" / "deals"
+LOGIN_JSON = ROOT_DIR / "config" / "login_credentials.json"
 
 app = Flask(__name__, template_folder=str(ROOT_DIR / "templates"))
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-me-in-prod")
+
+
+def _load_login_credentials() -> dict:
+    if LOGIN_JSON.exists():
+        try:
+            return json.loads(LOGIN_JSON.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
+def login_required(view_func):
+    @wraps(view_func)
+    def wrapper(*args, **kwargs):
+        if not session.get("user"):
+            return redirect(url_for("login"))
+        return view_func(*args, **kwargs)
+
+    return wrapper
 
 
 def classify_pdfs(meta: EmailMetadata) -> Tuple[List[Path], List[Path]]:
@@ -159,13 +182,52 @@ def process_unread_emails() -> int:
 
 
 @app.post("/tasks/process-unread")
+@login_required
 def process_unread_endpoint():
     """HTTP endpoint to trigger processing of unread emails."""
     count = process_unread_emails()
     return jsonify({"status": "ok", "emails_processed": count})
 
 
+@app.get("/")
+def root():
+    if session.get("user"):
+        return redirect(url_for("list_deals"))
+    return redirect(url_for("login"))
+
+
+@app.get("/login")
+def login():
+    if session.get("user"):
+        return redirect(url_for("list_deals"))
+    return render_template("login.html", error=None, username="")
+
+
+@app.post("/login")
+def login_post():
+    creds = _load_login_credentials()
+    expected_user = (creds.get("username") or "").strip()
+    expected_pass = creds.get("password") or ""
+
+    username = (request.form.get("username") or "").strip()
+    password = request.form.get("password") or ""
+
+    if username == expected_user and password == expected_pass:
+        session["user"] = username
+        return redirect(url_for("list_deals"))
+
+    error = "Invalid email or password."
+    return render_template("login.html", error=error, username=username)
+
+
+@app.get("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 @app.get("/deals")
+@login_required
 def list_deals():
     """Simple web UI: list all deals discovered in casa-capital/deals."""
     if not DEALS_ROOT.exists():
@@ -223,6 +285,7 @@ def list_deals():
 
 
 @app.get("/deals/<slug>")
+@login_required
 def deal_detail(slug: str):
     """Web UI: show one deal (metadata, analysis, underwriting)."""
     deal_dir = DEALS_ROOT / slug
@@ -288,6 +351,7 @@ def deal_detail(slug: str):
 
 
 @app.post("/deals/<slug>/reunderwrite")
+@login_required
 def reunderwrite_deal(slug: str):
     """Update FICO and re-run underwriting for a deal."""
     deal_dir = DEALS_ROOT / slug
