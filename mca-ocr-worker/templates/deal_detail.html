@@ -12,6 +12,33 @@
       a { color: #0366d6; text-decoration: none; }
       a:hover { text-decoration: underline; }
       .pill { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.8rem; margin-right: 0.4rem; background: #e5efff; color: #174ea6; }
+      /* MEGA SCRUB REPORT */
+      .scrub { font-family: "Consolas", "Monaco", monospace; font-size: 13px; max-width: 640px; margin: 1.5rem 0; }
+      .scrub-box { border: 2px solid #333; border-radius: 4px; margin-bottom: 0.5rem; overflow: hidden; }
+      .scrub-header { background: #333; color: #fff; padding: 0.4rem 0.75rem; font-weight: bold; text-align: center; }
+      .scrub-body { padding: 0.75rem 1rem; background: #f8f9fa; }
+      .scrub-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; margin: 0.5rem 0; }
+      .scrub-stat { background: #fff; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.4rem 0.6rem; }
+      .scrub-stat strong { display: block; font-size: 11px; color: #666; text-transform: uppercase; }
+      .scrub-section { margin: 0.75rem 0; }
+      .scrub-section h4 { margin: 0 0 0.35rem 0; font-size: 12px; color: #555; }
+      .scrub-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      .scrub-table th, .scrub-table td { border: 1px solid #dee2e6; padding: 0.35rem 0.5rem; text-align: left; }
+      .scrub-table th { background: #e9ecef; }
+      .bar { height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden; margin: 0.2rem 0; max-width: 120px; }
+      .bar-fill { height: 100%; border-radius: 4px; }
+      .bar-fill.good { background: #28a745; }
+      .bar-fill.warn { background: #ffc107; }
+      .bar-fill.bad { background: #dc3545; }
+      .qual-ok { color: #28a745; }
+      .qual-warn { color: #ffc107; }
+      .qual-bad { color: #dc3545; }
+      .scrub-flags { list-style: none; padding: 0; margin: 0.25rem 0; }
+      .scrub-flags li { padding: 0.2rem 0; }
+      .scrub-recommend { border: 2px solid #333; border-radius: 4px; padding: 0.5rem 0.75rem; margin: 0.5rem 0; background: #fff; }
+      .scrub-offer { margin: 0.5rem 0; }
+      .scrub-offer p { margin: 0.2rem 0; font-size: 12px; }
+      .scrub-footer { font-size: 11px; color: #666; margin-top: 0.5rem; }
     </style>
   </head>
   <body>
@@ -102,23 +129,164 @@
       {% endif %}
     </div>
 
+    {% if uw and uw.decision and analysis %}
+    {# ----- MEGA SCRUB REPORT ----- #}
+    {% set biz_name = (app_info.business_name if app_info else none) or (analysis.summary.account_holder if analysis.summary else none) or slug %}
+    {% set risk = uw.risk_score | default(0) | int %}
+    {% set grade = 'A' if risk >= 90 else 'B' if risk >= 80 else 'C+' if risk >= 70 else 'C' if risk >= 60 else 'D' if risk >= 50 else 'F' %}
+    {% set m = analysis.monthly_averages if analysis.monthly_averages else {} %}
+    {% set rev_stats = analysis.revenue_statistics if analysis.revenue_statistics else {} %}
+    {% set rec = analysis.underwriting_recommendation if analysis.underwriting_recommendation else {} %}
+    {% set ri = analysis.risk_indicators if analysis.risk_indicators else {} %}
+    {% set mca = analysis.mca_summary if analysis.mca_summary else {} %}
+    {% set stmts = (analysis.summary.statements_analyzed | default(0)) if analysis.summary else 1 %}
+    {% set nsf_total = ri.total_nsf_overdraft_fees | default(0) %}
+    {% set avg_dep = m.avg_deposits | default(rev_stats.true_revenue_monthly | default(0)) %}
+    {% set total_dep = avg_dep * stmts if stmts else avg_dep %}
+    {% set mca_burden = m.avg_mca_payments | default(0) %}
+    {% set mca_ratio = mca.mca_to_deposit_ratio | default(0) %}
+    {% set pos_count = mca.total_lenders | default(0) %}
+    {% set rec_offer = uw.recommended_offer if uw.recommended_offer else (uw.offers[0] if uw.offers else none) %}
+
+    <div class="scrub">
+      <div class="scrub-box">
+        <div class="scrub-header">🏦 MEGA SCRUB REPORT</div>
+        <div class="scrub-body">
+          <div style="text-align:center; font-weight:bold; margin-bottom: 0.5rem;">{{ biz_name }} ({{ slug }})</div>
+
+          <div class="scrub-box">
+            <div class="scrub-header">⚡ QUICK STATS DASHBOARD ⚡</div>
+            <div class="scrub-body">
+              <div class="scrub-stats">
+                <div class="scrub-stat"><strong>Decision</strong> {{ '✅ ' if uw.decision == 'AUTO_APPROVE' else '⚠️ ' if uw.decision == 'MANUAL_REVIEW' else '❌ ' }}{{ uw.decision }}</div>
+                <div class="scrub-stat"><strong>Grade</strong> {{ rec.tier | default(grade) }}</div>
+                <div class="scrub-stat"><strong>Score</strong> {{ risk }}/100</div>
+                <div class="scrub-stat"><strong>Revenue</strong> ${{ "{:,.1f}K".format(avg_dep / 1000) }}/mo</div>
+                <div class="scrub-stat"><strong>NSFs</strong> {{ nsf_total }} total │ {{ ri.max_nsf_per_period | default(0) }} max/mo</div>
+                <div class="scrub-stat"><strong>MCA</strong> {{ pos_count }} pos │ {{ "%.0f"|format(mca_ratio) }}% withheld</div>
+                <div class="scrub-stat"><strong>Statements</strong> {{ stmts }} analyzed</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="scrub-section">
+            <h4>🏦 BANKING ANALYSIS</h4>
+            <p>NSF Level: <span class="bar"><span class="bar-fill {{ 'good' if nsf_total == 0 else 'bad' }}" style="width: {{ [100 - nsf_total * 2, 0] | max }}%;"></span></span> {{ nsf_total }}/60 {{ '🟢 GOOD' if nsf_total == 0 else '🔴' }}</p>
+            <p>Avg Deps: ${{ "{:,.1f}K".format(avg_dep / 1000) }}/mo</p>
+            <p>Total Deps: ${{ "{:,.1f}K".format(total_dep / 1000) }}</p>
+            <p>Neg Days: {{ ri.total_negative_balance_days | default(0) }} total │ {{ ri.max_overdraft_days_per_period | default(0) }} max/mo</p>
+          </div>
+
+          {% if analysis.mca_positions and (analysis.mca_positions | length) > 0 %}
+          <div class="scrub-section">
+            <h4>💳 MCA POSITIONS</h4>
+            <p>Stacking: {{ pos_count }} │ Withhold: {{ "%.0f"|format(mca_ratio) }}% │ Burden: ${{ "{:,.1f}K".format(mca_burden / 1000) }}/mo</p>
+            <ul class="scrub-flags">
+              {% for lender, data in analysis.mca_positions.items() %}
+              <li>🔴 {{ lender }}: {{ data.payment_count | default(0) }} withdrawals (${{ "{:,.0f}".format(data.total_payments | default(0)) }})</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+
+          <div class="scrub-section">
+            <h4>📅 MONTH-BY-MONTH</h4>
+            <table class="scrub-table">
+              <thead><tr><th>Period</th><th>Deposits</th><th>EndBal</th><th>NSF</th><th>Qual</th></tr></thead>
+              <tbody>
+                {% if analysis.month_breakdown %}
+                  {% for row in analysis.month_breakdown %}
+                  <tr>
+                    <td>{{ row.label }}</td>
+                    <td>${{ "{:,.1f}K".format(row.deposits / 1000) }}</td>
+                    <td>${{ "{:,.1f}K".format(row.ending_balance / 1000) }}</td>
+                    <td>{{ row.nsf }}</td>
+                    <td>
+                      {% if row.qual == 'good' %}<span class="qual-ok">🟢</span>
+                      {% elif row.qual == 'warn' %}<span class="qual-warn">🟡</span>
+                      {% else %}<span class="qual-bad">🔴</span>{% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr>
+                    <td>{{ (analysis.summary.period_covered | default('—')) if analysis.summary else '—' }}</td>
+                    <td>${{ "{:,.0f}".format(avg_dep) }}</td>
+                    <td>${{ "{:,.0f}".format(ri.ending_balances[-1] if ri.ending_balances is defined and ri.ending_balances else 0) }}</td>
+                    <td>{{ nsf_total }}</td>
+                    <td>{{ ri.balance_trend | default('—') }}</td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+
+          {% if (uw.decline_reasons and uw.decline_reasons | length > 0) or (uw.flags and uw.flags | length > 0) or (rec.flags and rec.flags | length > 0) or (analysis.revenue_decline_percent and analysis.revenue_decline_percent > 0) %}
+          <div class="scrub-section">
+            <h4>🚨 RED FLAGS</h4>
+            <ul class="scrub-flags">
+              {% if analysis.revenue_decline_percent and analysis.revenue_decline_percent > 0 %}
+              <li>❌ Revenue decline: {{ "%.1f"|format(analysis.revenue_decline_percent) }}%</li>
+              {% endif %}
+              {% for r in (uw.decline_reasons or []) %}
+              <li>❌ {{ r.message if r is mapping else r }}</li>
+              {% endfor %}
+              {% for f in (uw.flags or []) %}
+              <li>❌ {{ f.message if f is mapping else f }}</li>
+              {% endfor %}
+              {% for msg in (rec.flags or []) %}
+              <li>❌ {{ msg }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+
+          <div class="scrub-section">
+            <h4>✅ POSITIVE FACTORS</h4>
+            <ul class="scrub-flags">
+              {% if nsf_total == 0 %}<li>✓ Low NSF activity: 0 total</li>{% endif %}
+              {% if mca_ratio <= 10 %}<li>✓ Low MCA burden: {{ "%.1f"|format(mca_ratio) }}% withhold</li>{% endif %}
+              {% if avg_dep >= 50000 %}<li>✓ Solid monthly deposits</li>{% endif %}
+              {% if ri.cash_buffer_multiple is defined and ri.cash_buffer_multiple > 50 %}
+                <li>✓ Strong cash buffer: {{ "%.2f"|format(ri.cash_buffer_multiple) }}x balance vs daily MCA</li>
+              {% endif %}
+              {% if risk >= 70 %}<li>✓ Risk score {{ risk }}/100</li>{% endif %}
+            </ul>
+          </div>
+
+          <div class="scrub-box scrub-recommend">
+            <strong>{{ '✅ RECOMMENDATION: ' if uw.decision == 'AUTO_APPROVE' else '⚠️ RECOMMENDATION: ' if uw.decision == 'MANUAL_REVIEW' else '❌ RECOMMENDATION: ' }}{{ uw.decision }}</strong>
+            <p class="scrub-footer">Health Score: {{ risk }}/100 ({{ rec.tier | default(grade) }})</p>
+          </div>
+
+          {% if rec_offer %}
+          <div class="scrub-section scrub-offer">
+            <h4>💵 OFFER TERMS</h4>
+            <p>Advance: ${{ "{:,.0f}".format(rec_offer.max_funding) }}</p>
+            <p>Factor: {{ "%.2f"|format(rec_offer.sell_rate) }}</p>
+            <p>RTR: ${{ "{:,.0f}".format(rec_offer.payback_amount) }}</p>
+            <p>Payment: ${{ "{:,.0f}".format(rec_offer.weekly_payment) }}/weekly (or ${{ "{:,.0f}".format(rec_offer.daily_payment) }}/daily)</p>
+            <p>Term: {{ rec_offer.max_term_months }} months</p>
+            <p>Net Fund: ${{ "{:,.0f}".format(rec_offer.max_funding - (rec_offer.origination_fee_amount | default(0))) }}</p>
+          </div>
+          {% endif %}
+
+          <div class="scrub-footer">📁 {{ slug }} &nbsp; 🕐 {{ uw.evaluated_at | default('') }}</div>
+        </div>
+      </div>
+    </div>
+    {% else %}
     <div class="card">
       <h2>Underwriting Decision</h2>
       {% if uw and uw.decision %}
         <p><span class="label">Decision:</span> {{ uw.decision }}</p>
         <p><span class="label">Risk score:</span> {{ uw.risk_score }}/100</p>
         <p><span class="label">Position:</span> {{ uw.position }}</p>
-
         {% if uw.offers %}
           <h3>Top offers</h3>
           <ul>
             {% for offer in uw.offers[:3] %}
-              <li>
-                <strong>{{ offer.program_name }}</strong>
-                (Position {{ offer.position }}, {{ offer.max_term_months }} mo) –
-                Max Funding {{ "{:,.2f}".format(offer.max_funding) }},
-                Daily {{ "{:,.2f}".format(offer.daily_payment) }}
-              </li>
+              <li><strong>{{ offer.program_name }}</strong> – Max ${{ "{:,.2f}".format(offer.max_funding) }}, Daily ${{ "{:,.2f}".format(offer.daily_payment) }}</li>
             {% endfor %}
           </ul>
         {% endif %}
@@ -126,6 +294,7 @@
         <p>No underwriting result found yet for this deal.</p>
       {% endif %}
     </div>
+    {% endif %}
 
     <details>
       <summary>Raw underwriting JSON</summary>
