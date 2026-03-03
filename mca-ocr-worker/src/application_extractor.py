@@ -60,23 +60,52 @@ def extract_application_data(pdf_path: str) -> Dict[str, Any]:
     text = _extract_text(pdf_path)
     data: Dict[str, Any] = {}
 
-    # Business name: "Legal Name ABUNDIA LC CORP" or "Legal Business Name: ..."
-    match = re.search(
-        r"Legal\s+Name\s+([A-Za-z0-9&\s\.\',]+?)(?:\s+Phone|\s+Fax|\s*$)",
-        text,
-        re.IGNORECASE,
-    )
-    if match:
-        data["business_name"] = match.group(1).strip()
-    else:
+    # Also keep a line-by-line view for table-style forms (e.g. Chase / USC)
+    lines = [ln.strip() for ln in text.splitlines() if ln and ln.strip()]
+
+    # Business name: handle multiple formats, including "Business Legal Name:" row in Chase/USC form
+    # 1) Scan lines for Business Legal Name / Legal Business Name labels
+    for ln in lines:
+        low = ln.lower()
+        if "business legal name" in low or "legal business name" in low:
+            m = re.search(
+                r"(?:Business\s+Legal\s+Name|Legal\s+Business\s+Name)\s*[:\-]*\s*(.+)",
+                ln,
+                re.IGNORECASE,
+            )
+            if m:
+                name_part = m.group(1)
+                # Cut off trailing DBA/other labels if they are on the same line
+                name_part = re.split(
+                    r"(Business\s+DBA\s+Name|DBA\s+Name|Business\s+DBA)",
+                    name_part,
+                    flags=re.IGNORECASE,
+                )[0]
+                data["business_name"] = name_part.strip(" :-")
+                break
+
+    # 2) Fallback: "Legal Name ABUNDIA LC CORP" or similar
+    if not data.get("business_name"):
         match = re.search(
-            r"(?:Legal\s+Business\s+Name|Business\s+Name|Company\s+Name)[:\s]+(.+)",
+            r"Legal\s+Name\s+([A-Za-z0-9&\s\.\',\-]+?)(?:\s+Phone|\s+Fax|\s*$)",
             text,
+            re.IGNORECASE,
         )
         if match:
             data["business_name"] = match.group(1).strip()
 
-    # Time in business: from "Business Start Date 2023-06-01" (compute years to today)
+    # 3) Fallback: generic Legal/Business/Company name labels
+    if not data.get("business_name"):
+        match = re.search(
+            r"(?:Business\s+Legal\s+Name|Legal\s+Business\s+Name|Business\s+Name|Company\s+Name)[:\s]+(.+?)(?:\n|$)",
+            text,
+            re.IGNORECASE,
+        )
+        if match:
+            data["business_name"] = match.group(1).strip()
+
+    # Time in business
+    # 1) "Business Start Date 2023-06-01"
     match = re.search(
         r"Business\s+Start\s+Date\s+(\d{4})-(\d{2})-(\d{2})",
         text,
@@ -89,7 +118,27 @@ def extract_application_data(pdf_path: str) -> Dict[str, Any]:
             data["time_in_business_years"] = round(delta.days / 365.25, 1)
         except (ValueError, TypeError):
             pass
-    else:
+
+    # 2) Chase / USC style: "Date Business Started" with year on same or next line
+    if "time_in_business_years" not in data:
+        for idx, ln in enumerate(lines):
+            low = ln.lower()
+            if "date business started" in low:
+                # Look for a 4-digit year on this line or the following line
+                year_match = re.search(r"\b(19|20)\d{2}\b", ln)
+                if not year_match and idx + 1 < len(lines):
+                    year_match = re.search(r"\b(19|20)\d{2}\b", lines[idx + 1])
+                if year_match:
+                    try:
+                        year = int(year_match.group(0))
+                        years = (date.today().year - year) + (date.today().month / 12.0)
+                        data["time_in_business_years"] = round(years, 1)
+                    except (ValueError, TypeError):
+                        pass
+                break
+
+    # 3) Explicit "Time in Business: 3.5"
+    if "time_in_business_years" not in data:
         match = re.search(
             r"Time\s+in\s+Business[^\d]{0,20}([0-9]{1,2}(?:\.[0-9]+)?)",
             text,
@@ -113,7 +162,7 @@ def extract_application_data(pdf_path: str) -> Dict[str, Any]:
         except ValueError:
             pass
 
-    # State: "State of Incorporation fl" or "State fl" (2-letter, allow lowercase)
+    # State: "State of Incorporation fl", "State: AL" (address block), or "State fl"
     match = re.search(
         r"(?:State\s+of\s+Incorporation|State)[:\s]+([A-Za-z]{2})\b",
         text,
@@ -121,6 +170,15 @@ def extract_application_data(pdf_path: str) -> Dict[str, Any]:
     )
     if match:
         data["state"] = match.group(1).strip().upper()
+    if not data.get("state"):
+        # Chase / United Secured Capital style: "State:" on its own line in address block
+        match = re.search(
+            r"(?:\n|\r)\s*State\s*:\s*([A-Za-z]{2})\s*(?:\n|Zip|$)",
+            text,
+            re.IGNORECASE,
+        )
+        if match:
+            data["state"] = match.group(1).strip().upper()
 
     # Industry: "Industry logisticts" or "Industry logistics Address"
     match = re.search(

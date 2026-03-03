@@ -124,28 +124,8 @@ def process_one_email(meta: EmailMetadata) -> None:
     with snapshot_path.open("w", encoding="utf-8") as f:
         json.dump(asdict(app_data), f, indent=2, default=str)
 
-    # If no FICO yet, auto-decline with explicit reason so user can collect it
-    if getattr(app_data, "fico_score", 0) <= 0:
-        uw = UnderwritingResult()
-        uw.decision = Decision.AUTO_DECLINE.value
-        uw.risk_score = 0
-        uw.position = app_data.existing_positions + 1
-        uw.decline_reasons = [
-            DeclineReason(
-                rule="missing_fico",
-                message="Missing FICO score in application; collect FICO and re-underwrite.",
-                value=None,
-                threshold=None,
-            )
-        ]
-        uw.flags = []
-
-        uw_path = deal_dir / "underwriting.json"
-        with uw_path.open("w", encoding="utf-8") as f:
-            json.dump(asdict(uw), f, indent=2, default=str)
-        return
-
-    # Save underwriting result JSON into the deal directory
+    # Always run underwriting, even if FICO is missing.
+    # Eligibility screening that depends on FICO will be handled later.
     uw_path = deal_dir / "underwriting.json"
     run_underwriting(app_data, label=meta.subject or "email", output_path=uw_path)
 
@@ -378,27 +358,10 @@ def reunderwrite_deal(slug: str):
     with snapshot_path.open("w", encoding="utf-8") as f:
         json.dump(asdict(app_data), f, indent=2, default=str)
 
-    # Missing FICO => still auto-decline
-    if getattr(app_data, "fico_score", 0) <= 0:
-        uw = UnderwritingResult()
-        uw.decision = Decision.AUTO_DECLINE.value
-        uw.risk_score = 0
-        uw.position = app_data.existing_positions + 1
-        uw.decline_reasons = [
-            DeclineReason(
-                rule="missing_fico",
-                message="Missing FICO score in application; collect FICO and re-underwrite.",
-                value=None,
-                threshold=None,
-            )
-        ]
-        uw.flags = []
-        uw_path = deal_dir / "underwriting.json"
-        with uw_path.open("w", encoding="utf-8") as f:
-            json.dump(asdict(uw), f, indent=2, default=str)
-    else:
-        uw_path = deal_dir / "underwriting.json"
-        run_underwriting(app_data, label=slug, output_path=uw_path)
+    # Always run underwriting, even if FICO is missing.
+    # Eligibility screening that depends on FICO will be handled later.
+    uw_path = deal_dir / "underwriting.json"
+    run_underwriting(app_data, label=slug, output_path=uw_path)
 
     return redirect(url_for("deal_detail", slug=slug))
 

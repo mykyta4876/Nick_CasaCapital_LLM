@@ -364,10 +364,11 @@ class UnderwritingEngine:
             if app.time_in_business_years < min_tib:
                 reasons.append(f"Time in business ({app.time_in_business_years}y) below minimum ({min_tib}y)")
             
-            # FICO score
+            # FICO score (skip when missing/0; eligibility screening will check FICO later)
+            fico = getattr(app, "fico_score", 0) or 0
             min_fico = prog.get("min_fico", 0)
-            if app.fico_score < min_fico:
-                reasons.append(f"FICO ({app.fico_score}) below minimum ({min_fico})")
+            if min_fico > 0 and fico > 0 and fico < min_fico:
+                reasons.append(f"FICO ({fico}) below minimum ({min_fico})")
             
             # Deposit days
             min_dep_days = prog.get("min_deposit_days_per_month", 0)

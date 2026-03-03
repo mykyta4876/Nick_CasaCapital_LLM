@@ -185,6 +185,8 @@ def generate_combined_analysis(results: list) -> dict:
     # Risk indicators
     total_nsf = sum(s.get('nsf_count', 0) for s in statements)
     total_overdraft_days = sum(s.get('overdraft_days', 0) for s in statements)
+    max_nsf_per_period = max((s.get('nsf_count', 0) for s in statements), default=0)
+    max_overdraft_days_per_period = max((s.get('overdraft_days', 0) for s in statements), default=0)
     
     # Ending balance trend
     ending_balances = [s['ending_balance'] for s in statements]
@@ -202,18 +204,33 @@ def generate_combined_analysis(results: list) -> dict:
     # Rule: Total MCA payments should not exceed 15-20% of deposits
     max_mca_capacity = avg_deposits * 0.15
     additional_capacity = max(0, max_mca_capacity - total_mca_monthly)
+
+    # Cash buffer vs daily MCA (MoneyThumb-style flag)
+    daily_mca = (total_mca_monthly / 22.0) if total_mca_monthly > 0 else 0.0
+    buffer_multiple = (avg_balance / daily_mca) if daily_mca > 0 else 0.0
     
     # Derive overall period covered (min start date to max end date)
     from datetime import datetime
 
     def _parse_date(d: str):
-        try:
-            return datetime.strptime(d, "%m/%d/%Y")
-        except Exception:
-            return None
+        for fmt in ("%m/%d/%Y", "%B %d, %Y", "%b %d, %Y"):
+            try:
+                return datetime.strptime(d, fmt)
+            except Exception:
+                continue
+        return None
 
-    starts = [s.get("statement_period_start") for s in statements if s.get("statement_period_start")]
-    ends = [s.get("statement_period_end") for s in statements if s.get("statement_period_end")]
+    # Order statements by start date for month-by-month view and revenue trend
+    enriched = []
+    for s in statements:
+        start_raw = s.get("statement_period_start")
+        start_dt = _parse_date(start_raw) if start_raw else None
+        enriched.append((start_dt, s))
+    enriched.sort(key=lambda x: (x[0] or datetime.min))
+    ordered_statements = [s for _, s in enriched]
+
+    starts = [s.get("statement_period_start") for s in ordered_statements if s.get("statement_period_start")]
+    ends = [s.get("statement_period_end") for s in ordered_statements if s.get("statement_period_end")]
 
     parsed_starts = [(_parse_date(d), d) for d in starts if _parse_date(d)]
     parsed_ends = [(_parse_date(d), d) for d in ends if _parse_date(d)]
@@ -221,19 +238,60 @@ def generate_combined_analysis(results: list) -> dict:
     if parsed_starts:
         overall_start = min(parsed_starts, key=lambda x: x[0])[1]
     else:
-        overall_start = statements[0].get("statement_period_start", "N/A")
+        overall_start = ordered_statements[0].get("statement_period_start", "N/A")
 
     if parsed_ends:
         overall_end = max(parsed_ends, key=lambda x: x[0])[1]
     else:
-        overall_end = statements[-1].get("statement_period_end", "N/A")
+        overall_end = ordered_statements[-1].get("statement_period_end", "N/A")
+
+    # Month-by-month rows (approximate)
+    month_rows = []
+    for idx, s in enumerate(ordered_statements):
+        start_label = s.get("statement_period_start", "") or ""
+        end_label = s.get("statement_period_end", "") or ""
+        label = f"Period {idx + 1}"
+        # Prefer the ending date's month/year (e.g. Nov 29–Dec 31 -> Dec 2025)
+        dt_end = _parse_date(end_label) if end_label else None
+        dt_start = _parse_date(start_label) if start_label else None
+        dt = dt_end or dt_start
+        if dt:
+            label = dt.strftime("%b %Y")
+        deposits = s.get("total_deposits", 0)
+        end_bal = s.get("ending_balance", 0)
+        nsf = s.get("nsf_count", 0)
+        qual = "good" if nsf == 0 else "warn" if nsf <= 5 else "bad"
+        month_rows.append(
+            {
+                "label": label,
+                "deposits": round(deposits, 2),
+                "ending_balance": round(end_bal, 2),
+                "nsf": int(nsf),
+                "qual": qual,
+            }
+        )
+
+    # Revenue trend / decline %
+    revenue_decline_pct = 0.0
+    revenue_trend = "stable"
+    if len(ordered_statements) >= 2:
+        first_dep = ordered_statements[0].get("total_deposits", 0) or 0
+        last_dep = ordered_statements[-1].get("total_deposits", 0) or 0
+        if first_dep > 0:
+            change = (last_dep - first_dep) / first_dep * 100.0
+            if change < 0:
+                revenue_decline_pct = round(abs(change), 1)
+                if abs(change) > 10:
+                    revenue_trend = "declining"
+            elif change > 10:
+                revenue_trend = "improving"
 
     return {
         'summary': {
             'statements_analyzed': len(statements),
             'period_covered': f"{overall_start} to {overall_end}",
-            'account_holder': statements[0].get('account_holder', 'N/A'),
-            'bank': statements[0].get('bank_name', 'N/A'),
+            'account_holder': ordered_statements[0].get('account_holder', 'N/A'),
+            'bank': ordered_statements[0].get('bank_name', 'N/A'),
         },
         'monthly_averages': {
             'avg_deposits': round(avg_deposits, 2),
@@ -242,6 +300,9 @@ def generate_combined_analysis(results: list) -> dict:
             'avg_mca_payments': round(total_mca_monthly, 2),
             'available_after_mca': round(available_revenue, 2),
         },
+        'month_breakdown': month_rows,
+        'revenue_decline_percent': revenue_decline_pct,
+        'revenue_trend': revenue_trend,
         'mca_positions': mca_lenders,
         'mca_summary': {
             'total_lenders': len(mca_lenders),
@@ -252,8 +313,11 @@ def generate_combined_analysis(results: list) -> dict:
         'risk_indicators': {
             'total_nsf_overdraft_fees': total_nsf,
             'total_negative_balance_days': total_overdraft_days,
+            'max_nsf_per_period': int(max_nsf_per_period),
+            'max_overdraft_days_per_period': int(max_overdraft_days_per_period),
             'balance_trend': balance_trend,
             'ending_balances': ending_balances,
+            'cash_buffer_multiple': round(buffer_multiple, 2),
         },
         'underwriting_recommendation': generate_recommendation(
             avg_deposits, total_mca_monthly, total_nsf, total_overdraft_days, avg_balance

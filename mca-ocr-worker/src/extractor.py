@@ -489,6 +489,97 @@ def parse_txn_bank(text: str) -> BankStatementData:
     return data
 
 
+def parse_chase(text: str) -> BankStatementData:
+    """Parse Chase Business Complete Checking statement."""
+    data = BankStatementData()
+    data.bank_name = "Chase"
+
+    # Account number: "Account Number: 000000552696885"
+    match = re.search(r'Account\s+Number[:\s]+([0-9X ]+)', text, re.IGNORECASE)
+    if match:
+        data.account_number = match.group(1).replace(" ", "").strip()
+
+    # Isolate CHECKING SUMMARY block to avoid picking up other \"Ending Balance\" lines.
+    # We use the custom markers that pdfplumber extracted in this layout (*start*summary ... *end*summary).
+    summary_section = re.search(
+        r'\*start\*summary([\s\S]*?)\*end\*summary',
+        text,
+        re.IGNORECASE,
+    )
+    summary_text = summary_section.group(1) if summary_section else text
+
+    # Statement period: e.g. "November 01, 2025 through November 28, 2025"
+    # Allow for extra spaces/newlines and "through" or "to" or "-" between dates.
+    match = re.search(
+        r'([A-Za-z]+\s+\d{1,2},\s+\d{4})\s*(?:through|to|-)\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})',
+        text,
+        re.IGNORECASE,
+    )
+    if not match:
+        # Sometimes split across lines: first date on one line, second on next
+        match = re.search(
+            r'([A-Za-z]+\s+\d{1,2},\s+\d{4})\s*(?:through|to|-)\s*[\r\n]+\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})',
+            text,
+            re.IGNORECASE,
+        )
+    if match:
+        data.statement_period_start = match.group(1).strip()
+        data.statement_period_end = match.group(2).strip()
+
+    # CHECKING SUMMARY block totals
+    # Beginning Balance: match the amount on the same line (e.g. \"Beginning Balance $41,275.18\")
+    match = re.search(
+        r'^Beginning\s+Balance\s+(-?\$?[\d,]+\.\d{2})\s*$',
+        summary_text,
+        re.MULTILINE | re.IGNORECASE,
+    )
+    if match:
+        data.beginning_balance = parse_currency(match.group(1))
+
+    # Ending Balance: match the amount on the same line (e.g. \"Ending Balance 95 $1,120.84\")
+    match = re.search(
+        r'^Ending\s+Balance.*?(-?\$?[\d,]+\.\d{2})\s*$',
+        summary_text,
+        re.MULTILINE | re.IGNORECASE,
+    )
+    if match:
+        data.ending_balance = parse_currency(match.group(1))
+
+    # Deposits and Additions: "Deposits and Additions   18   69,391.34"
+    match = re.search(
+        r'Deposits\s+and\s+Additions\s+\d+\s+([\d,]+\.\d{2})',
+        text,
+        re.IGNORECASE,
+    )
+    if match:
+        data.total_deposits = parse_currency(match.group(1))
+
+    # Withdrawals: sum of several lines in summary
+    withdrawals_total = 0.0
+    for label in [
+        r'Checks\s+Paid',
+        r'ATM\s*&\s*Debit\s+Card\s+Withdrawals',
+        r'Electronic\s+Withdrawals',
+        r'Other\s+Withdrawals',
+        r'Fees',
+    ]:
+        m = re.search(label + r'\s+\d+\s+([\d,]+\.\d{2})', text, re.IGNORECASE)
+        if m:
+            withdrawals_total += parse_currency(m.group(1))
+    if withdrawals_total > 0:
+        data.total_withdrawals = withdrawals_total
+
+    # Count NSF/overdraft-related fees
+    nsf_matches = re.findall(
+        r'OVERDRAFT\s+ITEM\s+FEE|NSF\s+FEE|RETURNED\s+ITEM\s+FEE|Insufficient\s+Funds',
+        text,
+        re.IGNORECASE,
+    )
+    data.nsf_count = len(nsf_matches)
+
+    return data
+
+
 def extract_and_parse(pdf_path: str) -> BankStatementData:
     """Main entry point: extract and parse a bank statement PDF"""
     pdf_path = Path(pdf_path)
@@ -515,6 +606,14 @@ def extract_and_parse(pdf_path: str) -> BankStatementData:
         raise ValueError("Failed to extract text from PDF")
     
     print(f"Extracted {len(text):,} characters")
+
+    # Optionally save raw extracted text next to the PDF for debugging
+    try:
+        raw_text_path = pdf_path.with_name(pdf_path.stem + "_text.txt")
+        with raw_text_path.open("w", encoding="utf-8") as f:
+            f.write(text)
+    except Exception:
+        pass
     
     # Step 3: Detect bank and parse
     text_lower = text.lower()
@@ -524,12 +623,12 @@ def extract_and_parse(pdf_path: str) -> BankStatementData:
     elif 'txn bank' in text_lower:
         print("Detected: TXN Bank")
         data = parse_txn_bank(text)
+    elif 'chase' in text_lower:
+        print("Detected: Chase")
+        data = parse_chase(text)
     elif 'bank of america' in text_lower:
         print("Detected: Bank of America")
         data = parse_bank_of_america(text)
-    elif 'chase' in text_lower:
-        print("Detected: Chase (using generic parser)")
-        data = parse_bank_of_america(text)  # TODO: Add Chase-specific parser
     elif 'wells fargo' in text_lower:
         print("Detected: Wells Fargo (using generic parser)")
         data = parse_bank_of_america(text)  # TODO: Add Wells Fargo parser
