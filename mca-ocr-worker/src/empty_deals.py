@@ -15,9 +15,11 @@ def empty_directory(dir_path: str) -> None:
 
 if __name__ == "__main__":
     # Change this to your actual deals directory
-    deals_dir = r"/opt/apps/Nick_CasaCapital_LLM/mca-ocr-worker/deals"
+    deals_dir = r"/opt/apps/Nick_CasaCapital_LLM/casa-capital/deals"
     # For Windows example:
-    # deals_dir = r"D:\Project\Nick_CasaCapital_LLM\mca-ocr-worker\deals"
+    # deals_dir = r"D:\Project\Nick_CasaCapital_LLM\casa-capital\deals"
 
     empty_directory(deals_dir)
     print(f"Emptied directory: {deals_dir}")
+
+# python src/empty_deals.py
